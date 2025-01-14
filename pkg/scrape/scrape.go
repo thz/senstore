@@ -65,7 +65,9 @@ func (s *Scraper) Scrape(ctx context.Context) (map[string]float32, error) {
 		if strings.HasPrefix(line, "go_") {
 			continue
 		}
-
+		if strings.HasPrefix(line, "process_") {
+			continue
+		}
 		if strings.HasPrefix(line, "promhttp_") {
 			continue
 		}

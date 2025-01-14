@@ -43,7 +43,7 @@ func (s *Scraper) Scrape(ctx context.Context) (map[string]float32, error) {
 
 	// make http request to endpoint
 	c := http.Client{}
-	req, err := http.NewRequest("GET", s.endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", s.endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}

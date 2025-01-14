@@ -17,6 +17,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -38,7 +39,10 @@ func NewWriter() *Writer {
 
 func (w *Writer) Prepare(ctx context.Context) error {
 	log := util.CtxLogOrPanic(ctx)
-	w.maybeConnect(ctx)
+
+	if err := w.maybeConnect(ctx); err != nil {
+		return fmt.Errorf("failed to connect to db: %w", err)
+	}
 
 	w.sensors = make(map[string]int32)
 	rows, err := w.db.Query(`SELECT id,name FROM sensors`)
@@ -73,18 +77,16 @@ func (w *Writer) Write(ctx context.Context, ts time.Time, data map[string]float3
 	}
 
 	if !w.prepared {
-		return fmt.Errorf("writer not prepared")
+		return errors.New("writer not prepared")
 	}
 
 	txn, err := w.db.Begin()
 	if err != nil {
-		log.Error("failed to begin transaction", zap.Error(err))
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
 	stmt, err := w.db.Prepare(`INSERT into sensor_readings (ts, sensor, data) VALUES ($1, $2, $3)`)
 	if err != nil {
-		log.Error("failed to prepare statement", zap.Error(err))
 		return fmt.Errorf("failed to prepare: %w", err)
 	}
 
@@ -105,7 +107,6 @@ func (w *Writer) Write(ctx context.Context, ts time.Time, data map[string]float3
 
 	err = txn.Commit()
 	if err != nil {
-		log.Error("failed to commit transaction", zap.Error(err))
 		return fmt.Errorf("failed to commit: %w", err)
 	}
 	log.Info("committed transaction", zap.String("ts", ts.Format(time.RFC3339)), zap.Int("count", count))
@@ -121,7 +122,7 @@ func (w *Writer) maybeConnect(ctx context.Context) error {
 	log.Info("connecting to db")
 	connStr := os.Getenv("CONN")
 	if connStr == "" {
-		return fmt.Errorf("CONN env var not set")
+		return errors.New("CONN env var not set")
 	}
 
 	db, err := sql.Open("postgres", connStr)

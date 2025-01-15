@@ -36,10 +36,10 @@ func NewScraper(endpoint string) *Scraper {
 	}
 }
 
-func (s *Scraper) Scrape(ctx context.Context) (map[string]float32, error) {
+func (s *Scraper) Scrape(ctx context.Context) (map[string]int64, error) {
 	log := util.CtxLogOrPanic(ctx)
 
-	data := make(map[string]float32)
+	data := make(map[string]int64)
 
 	// make http request to endpoint
 	c := http.Client{}
@@ -59,17 +59,20 @@ func (s *Scraper) Scrape(ctx context.Context) (map[string]float32, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "#") {
+		unitFactor := 1.0
+		switch {
+		case strings.HasPrefix(line, "#"):
 			continue
-		}
-		if strings.HasPrefix(line, "go_") {
+		case strings.HasPrefix(line, "go_"):
 			continue
-		}
-		if strings.HasPrefix(line, "process_") {
+		case strings.HasPrefix(line, "process_"):
 			continue
-		}
-		if strings.HasPrefix(line, "promhttp_") {
+		case strings.HasPrefix(line, "promhttp_"):
 			continue
+		case strings.HasPrefix(line, "temperature_"):
+			unitFactor = 1000.0
+		case strings.HasPrefix(line, "pressure_"):
+			unitFactor = 1000.0
 		}
 
 		parts := strings.Split(line, " ")
@@ -83,7 +86,7 @@ func (s *Scraper) Scrape(ctx context.Context) (map[string]float32, error) {
 			log.Warn("failed to parse value", zap.String("value", parts[1]))
 			continue
 		}
-		data[parts[0]] = float32(value)
+		data[parts[0]] = int64(value * unitFactor)
 	}
 
 	return data, nil

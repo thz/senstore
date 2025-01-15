@@ -35,28 +35,33 @@ func main() {
 		Short: "daemon to push sensor data to sql database",
 		Run: func(cmd *cobra.Command, args []string) {
 			scrapeAddr, _ := cmd.Flags().GetString("scrape-address")
+			columnName, _ := cmd.Flags().GetString("column")
 
 			ctx := context.Background()
 			log := util.NewLogger()
 			ctx = util.CtxWithLog(ctx, log)
 
-			if err := run(ctx, scrapeAddr); err != nil {
+			if err := run(ctx, scrapeAddr, columnName); err != nil {
 				log.Error("failed to execute command", zap.Error(err))
 				os.Exit(1)
 			}
 		},
 	}
 	rootCmd.Flags().StringP("scrape-address", "s", "http://127.0.0.1:9000/metrics", "address to scrape readings")
+	rootCmd.Flags().StringP("column", "c", "reading", "database column to write readings to")
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, scrapeAddress string) error {
+func run(ctx context.Context, scrapeAddress, columnName string) error {
 	log := util.CtxLogOrPanic(ctx)
 	scraper := scrape.NewScraper(scrapeAddress)
 
 	dbWriter := db.NewWriter()
+	if columnName != "" {
+		dbWriter.SetReadingColumn(columnName)
+	}
 	ticker := time.NewTicker(15 * time.Second)
 
 	timestamp := time.Now()

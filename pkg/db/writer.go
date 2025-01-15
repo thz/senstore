@@ -28,13 +28,20 @@ import (
 )
 
 type Writer struct {
-	db       *sql.DB
-	sensors  map[string]int32
-	prepared bool
+	db            *sql.DB
+	sensors       map[string]int32
+	prepared      bool
+	readingColumn string
 }
 
 func NewWriter() *Writer {
-	return &Writer{}
+	return &Writer{
+		readingColumn: "reading",
+	}
+}
+
+func (w *Writer) SetReadingColumn(readingColumn string) {
+	w.readingColumn = readingColumn
 }
 
 func (w *Writer) Prepare(ctx context.Context) error {
@@ -68,7 +75,7 @@ func (w *Writer) Prepare(ctx context.Context) error {
 	return nil
 }
 
-func (w *Writer) Write(ctx context.Context, ts time.Time, data map[string]float32) error {
+func (w *Writer) Write(ctx context.Context, ts time.Time, data map[string]int64) error {
 	log := util.CtxLogOrPanic(ctx)
 
 	err := w.maybeConnect(ctx)
@@ -85,10 +92,11 @@ func (w *Writer) Write(ctx context.Context, ts time.Time, data map[string]float3
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 
-	stmt, err := w.db.Prepare(`INSERT into sensor_readings (ts, sensor, data) VALUES ($1, $2, $3)`)
+	stmt, err := w.db.Prepare(fmt.Sprintf("INSERT into sensor_readings (ts, sensor, %s) VALUES ($1, $2, $3)", w.readingColumn))
 	if err != nil {
 		return fmt.Errorf("failed to prepare: %w", err)
 	}
+	defer stmt.Close()
 
 	count := 0
 	for key, value := range data {

@@ -29,38 +29,60 @@ import (
 	"github.com/thz/senstore/pkg/scrape"
 )
 
+type runOpts struct {
+	scrapeAddress         string
+	postgresColumn        string
+	postgresConnectString string
+}
+
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "senstore",
-		Short: "daemon to push sensor data to sql database",
+		Short: "daemon to push sensor data to a data sync (postgres / kafka)",
 		Run: func(cmd *cobra.Command, args []string) {
-			scrapeAddr, _ := cmd.Flags().GetString("scrape-address")
-			columnName, _ := cmd.Flags().GetString("column")
+			runOpts := runOpts{
+				scrapeAddress:         os.Getenv("SCRAPE_ADDRESS"),
+				postgresColumn:        os.Getenv("POSTGRES_COLUMN"),
+				postgresConnectString: os.Getenv("POSTGRES_CONNECT_STRING"),
+			}
+
+			if scrapeAddress, _ := cmd.Flags().GetString("scrape-address"); scrapeAddress != "" {
+				runOpts.scrapeAddress = scrapeAddress
+			}
+
+			if postgresColumnName, _ := cmd.Flags().GetString("postgres-column"); postgresColumnName != "" {
+				runOpts.postgresColumn = postgresColumnName
+			}
+
+			if postgresConnectString, _ := cmd.Flags().GetString("postgres-connect-string"); postgresConnectString != "" {
+				runOpts.postgresConnectString = postgresConnectString
+			}
 
 			ctx := context.Background()
 			log := util.NewLogger()
 			ctx = util.CtxWithLog(ctx, log)
 
-			if err := run(ctx, scrapeAddr, columnName); err != nil {
+			if err := run(ctx, runOpts); err != nil {
 				log.Error("failed to execute command", zap.Error(err))
 				os.Exit(1)
 			}
 		},
 	}
 	rootCmd.Flags().StringP("scrape-address", "s", "http://127.0.0.1:9000/metrics", "address to scrape readings")
-	rootCmd.Flags().StringP("column", "c", "reading", "database column to write readings to")
+	rootCmd.Flags().StringP("postgres-column", "c", "reading", "database column to write readings to")
+	rootCmd.Flags().StringP("postgres-connect-string", "p", "", "postgres connection string")
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, scrapeAddress, columnName string) error {
+func run(ctx context.Context, opts runOpts) error {
 	log := util.CtxLogOrPanic(ctx)
-	scraper := scrape.NewScraper(scrapeAddress)
+	scraper := scrape.NewScraper(opts.scrapeAddress)
 
-	dbWriter := db.NewWriter()
-	if columnName != "" {
-		dbWriter.SetReadingColumn(columnName)
+	dbWriter := db.NewWriter(opts.postgresConnectString)
+	if opts.postgresColumn != "" {
+		dbWriter.SetReadingColumn(opts.postgresColumn)
 	}
 	ticker := time.NewTicker(15 * time.Second)
 

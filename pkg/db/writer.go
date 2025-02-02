@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -32,11 +31,13 @@ type Writer struct {
 	sensors       map[string]int32
 	prepared      bool
 	readingColumn string
+	connStr       string
 }
 
-func NewWriter() *Writer {
+func NewWriter(connStr string) *Writer {
 	return &Writer{
 		readingColumn: "reading",
+		connStr:       connStr,
 	}
 }
 
@@ -127,13 +128,12 @@ func (w *Writer) maybeConnect(ctx context.Context) error {
 		return nil
 	}
 	log := util.CtxLogOrPanic(ctx)
-	log.Info("connecting to db")
-	connStr := os.Getenv("CONN")
-	if connStr == "" {
-		return errors.New("CONN env var not set")
+	log.Info("connecting to db", zap.String("conn", w.connStr))
+	if w.connStr == "" {
+		return errors.New("postgres connection string not set")
 	}
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("postgres", w.connStr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to db: %w", err)
 	}

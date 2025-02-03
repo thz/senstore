@@ -35,10 +35,8 @@ jobs:
       matrix:
         targets:
           - 'darwin-*'
-          - linux-arm-7
           - linux-arm64
           - linux-amd64
-          - linux-386
 
     steps:
     - name: checkout

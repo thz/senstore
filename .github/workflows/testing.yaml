@@ -31,10 +31,10 @@ jobs:
   test-cross:
     runs-on: ubuntu-latest
     steps:
-    env:
-      GO111MODULE: on
     - name: Build
       uses: crazy-max/ghaction-xgo@v3
+      env:
+        GO111MODULE: on
       with:
         pkg: cmd/senstore
         xgo_version: latest

@@ -39,8 +39,6 @@ jobs:
           - linux-arm64
           - linux-amd64
           - linux-386
-          - linux-arm64-musl
-          - linux-amd64-musl
 
     steps:
     - name: checkout

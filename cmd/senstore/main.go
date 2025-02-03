@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -26,6 +27,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/thz/senstore/pkg/db"
+	"github.com/thz/senstore/pkg/kafka"
 	"github.com/thz/senstore/pkg/scrape"
 )
 
@@ -33,6 +35,11 @@ type runOpts struct {
 	scrapeAddress         string
 	postgresColumn        string
 	postgresConnectString string
+
+	kafkaBootstrap string
+	kafkaTopic     string
+	kafkaSAKey     string
+	kafkaSASeret   string
 }
 
 func main() {
@@ -40,29 +47,34 @@ func main() {
 		Use:   "senstore",
 		Short: "daemon to push sensor data to a data sync (postgres / kafka)",
 		Run: func(cmd *cobra.Command, args []string) {
-			runOpts := runOpts{
+			opts := runOpts{
 				scrapeAddress:         os.Getenv("SCRAPE_ADDRESS"),
 				postgresColumn:        os.Getenv("POSTGRES_COLUMN"),
 				postgresConnectString: os.Getenv("POSTGRES_CONNECT_STRING"),
+
+				kafkaBootstrap: os.Getenv("KAFKA_BOOTSTRAP"),
+				kafkaTopic:     os.Getenv("KAFKA_TOPIC"),
+				kafkaSAKey:     os.Getenv("KAFKA_SA_KEY"),
+				kafkaSASeret:   os.Getenv("KAFKA_SA_SECRET"),
 			}
 
 			if scrapeAddress, _ := cmd.Flags().GetString("scrape-address"); scrapeAddress != "" {
-				runOpts.scrapeAddress = scrapeAddress
+				opts.scrapeAddress = scrapeAddress
 			}
 
 			if postgresColumnName, _ := cmd.Flags().GetString("postgres-column"); postgresColumnName != "" {
-				runOpts.postgresColumn = postgresColumnName
+				opts.postgresColumn = postgresColumnName
 			}
 
 			if postgresConnectString, _ := cmd.Flags().GetString("postgres-connect-string"); postgresConnectString != "" {
-				runOpts.postgresConnectString = postgresConnectString
+				opts.postgresConnectString = postgresConnectString
 			}
 
 			ctx := context.Background()
 			log := util.NewLogger()
 			ctx = util.CtxWithLog(ctx, log)
 
-			if err := run(ctx, runOpts); err != nil {
+			if err := run(ctx, opts); err != nil {
 				log.Error("failed to execute command", zap.Error(err))
 				os.Exit(1)
 			}
@@ -80,9 +92,31 @@ func run(ctx context.Context, opts runOpts) error {
 	log := util.CtxLogOrPanic(ctx)
 	scraper := scrape.NewScraper(opts.scrapeAddress)
 
-	dbWriter := db.NewWriter(opts.postgresConnectString)
-	if opts.postgresColumn != "" {
-		dbWriter.SetReadingColumn(opts.postgresColumn)
+	var (
+		dbWriter    *db.Writer
+		kafkaWriter *kafka.Writer
+	)
+	if opts.postgresConnectString != "" {
+		dbWriter = db.NewWriter(opts.postgresConnectString)
+		if opts.postgresColumn != "" {
+			dbWriter.SetReadingColumn(opts.postgresColumn)
+		}
+		log.Info("using postgres writer",
+			zap.String("column", dbWriter.ReadingColumn()))
+	}
+
+	if opts.kafkaBootstrap != "" {
+		kafkaWriter = kafka.NewWriter(kafka.Opts{
+			Topic:     opts.kafkaTopic,
+			SAKey:     opts.kafkaSAKey,
+			SASecret:  opts.kafkaSASeret,
+			Bootstrap: opts.kafkaBootstrap,
+		})
+		log.Info("using kafka writer",
+			zap.String("topic", opts.kafkaTopic),
+			zap.String("bootstrap", opts.kafkaBootstrap),
+			zap.String("sa_key", opts.kafkaSAKey),
+		)
 	}
 	ticker := time.NewTicker(15 * time.Second)
 
@@ -93,10 +127,37 @@ func run(ctx context.Context, opts runOpts) error {
 			log.Error("failed to scrape", zap.Error(err))
 			return fmt.Errorf("failed to scrape: %w", err)
 		}
-		err = dbWriter.Write(ctx, timestamp, data)
-		if err != nil {
-			log.Error("failed to write to db", zap.Error(err))
-			return fmt.Errorf("failed to write to db: %w", err)
+
+		if dbWriter != nil {
+			err = dbWriter.Write(ctx, timestamp, data)
+			if err != nil {
+				log.Error("failed to write to db", zap.Error(err))
+				return fmt.Errorf("failed to write to db: %w", err)
+			}
+			log.Info("wrote to db",
+				zap.String("column", dbWriter.ReadingColumn()),
+				zap.Time("timestamp", timestamp),
+				zap.Any("data", data),
+			)
+		}
+
+		if kafkaWriter != nil {
+			jsonBytesReadings, err := json.Marshal(data)
+			if err != nil {
+				log.Error("failed to marshal data", zap.Error(err))
+				return fmt.Errorf("failed to marshal data: %w", err)
+			}
+
+			err = kafkaWriter.Produce(timestamp, jsonBytesReadings)
+			if err != nil {
+				log.Error("failed to write to kafka", zap.Error(err))
+				return fmt.Errorf("failed to write to kafka: %w", err)
+			}
+			log.Info("produced to kafka",
+				zap.String("topic", opts.kafkaTopic),
+				zap.String("data", string(jsonBytesReadings)),
+				zap.Time("timestamp", timestamp),
+			)
 		}
 
 		select {

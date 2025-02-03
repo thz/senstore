@@ -36,7 +36,6 @@ jobs:
       env:
         GO111MODULE: on
       with:
-        pkg: cmd/senstore
         xgo_version: latest
         go_version: 1.23
         dest: build

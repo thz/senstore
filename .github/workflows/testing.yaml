@@ -51,6 +51,7 @@ jobs:
       id: cgo-action
       uses: go-cross/cgo-actions@v1
       with:
+        dir: .
         packages: ./cmd/senstore/
         targets: ${{ matrix.targets }}
 

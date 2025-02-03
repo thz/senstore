@@ -29,23 +29,29 @@ jobs:
         go build ./...
 
   test-cross:
+    strategy:
+      matrix:
+        target:
+          - linux/amd64
+          - linux/arm64
+          - darwin/amd64
+          - darwin/arm64
+          - windows/amd64
     runs-on: ubuntu-latest
     steps:
     - name: checkout
       uses: actions/checkout@v4
     - name: Build
       uses: crazy-max/ghaction-xgo@v3
-      env:
-        GO111MODULE: on
       with:
         pkg: cmd/senstore
         xgo_version: latest
         go_version: 1.23
         dest: build
-        prefix: senstore
-        targets: linux/amd64,linux/arm64,darwin/arm64
+        prefix: senstore-${{ matrix.target }}
+        targets: ${{ matrix.target }}
         v: true
-        x: true
+        x: false
         race: false
         ldflags: -s -w
         buildmode: default

@@ -36,7 +36,6 @@ jobs:
           - linux/arm64
           - darwin/amd64
           - darwin/arm64
-          - windows/*
     runs-on: ubuntu-latest
     steps:
     - name: checkout

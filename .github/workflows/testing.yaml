@@ -36,7 +36,7 @@ jobs:
     - name: Build
       uses: crazy-max/ghaction-xgo@v3
       with:
-        pkg: ./cmd/senstore/
+        pkg: cmd/senstore
         xgo_version: latest
         go_version: 1.23
         dest: build

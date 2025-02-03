@@ -11,16 +11,33 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+    - name: checkout
+      uses: actions/checkout@v4
 
-    - name: go build
+    - name: go build all
       run: |
         go build ./...
 
-  release:
+  test-matrix:
     needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+
+    - name: go build matrix
+      run: |
+        env GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 \
+          go build -o senstore-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/senstore
+
+  release:
+    needs: test-matrix
     runs-on: ubuntu-latest
     steps:
       - name: Create Release

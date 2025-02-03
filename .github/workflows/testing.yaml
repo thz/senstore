@@ -33,15 +33,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux]
-        goarch: [amd64, arm64]
+        targets:
+          - 'darwin-*'
+          - linux-arm-7
+          - linux-arm64
+          - linux-amd64
+          - linux-386
+          - linux-arm64-musl
+          - linux-amd64-musl
 
     steps:
     - name: checkout
       uses: actions/checkout@v4
 
-    - name: go build matrix
-      run: |
-        env GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=1 \
-          go build -o senstore-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/senstore
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.23'
+
+    - name: Build go program
+      id: cgo-action
+      uses: go-cross/cgo-actions@v1
+      with:
+        packages: ./cmd/senstore/
+        targets: ${{ matrix.targets }}
 

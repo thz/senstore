@@ -45,6 +45,10 @@ func (w *Writer) SetReadingColumn(readingColumn string) {
 	w.readingColumn = readingColumn
 }
 
+func (w *Writer) ReadingColumn() string {
+	return w.readingColumn
+}
+
 func (w *Writer) Prepare(ctx context.Context) error {
 	log := util.CtxLogOrPanic(ctx)
 

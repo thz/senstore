@@ -47,13 +47,16 @@ func (w *Writer) Produce(ts time.Time, data []byte) error {
 		return fmt.Errorf("failed to create producer: %w", err)
 	}
 
-	w.producer.Produce(&kafka.Message{
+	err = w.producer.Produce(&kafka.Message{
 		TopicPartition: kafka.TopicPartition{Topic: &w.topic, Partition: kafka.PartitionAny},
 		Key:            []byte("readings"),
 		Value:          data,
 		TimestampType:  kafka.TimestampCreateTime,
 		Timestamp:      ts,
 	}, nil)
+	if err != nil {
+		return fmt.Errorf("failed to produce readings: %w", err)
+	}
 	return nil
 }
 
